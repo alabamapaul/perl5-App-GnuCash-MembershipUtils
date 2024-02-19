@@ -36,3 +36,5 @@ inc/
 /pm_to_blib
 /*.zip
 
+# Ignore config files used for dev testing
+/*.yml
