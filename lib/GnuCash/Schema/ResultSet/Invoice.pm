@@ -41,7 +41,7 @@ sub last_invoice_id {
     )->first;
 
     return $invoice->id if ($invoice);
-    return undef;
+    return;
 
 }
 
