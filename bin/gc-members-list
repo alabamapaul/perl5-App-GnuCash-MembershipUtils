@@ -8,6 +8,7 @@
 ##****************************************************************************
 use strict;
 use warnings;
+use feature 'say';
 
 ## Cannot use Find::Bin because script may be invoked as an
 ## argument to another script, so instead we use __FILE__
@@ -22,14 +23,16 @@ use lib File::Spec->catdir(
   File::Spec->splitdir(dirname(__FILE__)), 
   qq{..}, 
   qq{lib});
-use App::GnuCash::MembershipUtils;
+use App::GnuCash::MembershipUtils qw( :all );
 use Getopt::Long;
 use Pod::Usage;
 use Cwd qw(abs_path);
 use Readonly;
+use Data::Dump qw( pp );
+
 
 ## Used for the version string
-Readonly::Scalar my $VERSION => qq{0.01};
+Readonly::Scalar my $VERSION       => qq{0.01};
 Readonly::Scalar my $DEFAULT_TITLE => qq{GnuCash Memebers List};
 
 ##--------------------------------------------------------
@@ -43,18 +46,24 @@ Readonly::Scalar my $TRUE  => 1;
 ## For GetOptions the following parameter indicaters are used
 ##    = Required parameter
 ##    : Optional parameter
-##    s String parameter
-##    i Integer parameter
-##    f Real number (float)
-## If a paramer is not indicated, then a value of 1
+##        s String parameter
+##        i Integer parameter
+##        f Real number (float)
+##    + Parameter is inremented for each occurrence on
+##      command line
+##    ! boolean parameter that also allows "no-xxx"
+## If a parameter is not indicated, then a value of 1
 ## indicates the parameter was found on the command line
 ##--------------------------------------------------------
 #<<< begin perltidy exclusion zone
 my @CommandLineOptions = (
-  "all",
-  "help",
-  "man",
-  "version",
+  "all|a",
+  "help|h|?",
+  "man|m",
+  "version|v",
+  "config|c:s",
+  "file|f:s",
+  "debug|d+",
 );
 #>>> end perltidy exclusion zone
 
@@ -69,6 +78,8 @@ my %gOptions = (
   "man"     => 0,
   "version" => 0,
   "debug"   => 0,
+  "config"  => "GnuCashMembershipUtils.yml",
+  "file"    => undef,
 );
 #>>> end perltidy exclusion zone
 
@@ -82,7 +93,6 @@ my %gOptions = (
 sub process_commandline
 {
   my $allow_extra_args = shift;
-
   ## Pass through un-handled options in @ARGV
   Getopt::Long::Configure("pass_through");
   GetOptions(\%gOptions, @CommandLineOptions);
@@ -143,7 +153,7 @@ sub process_commandline
 }
 
 ##----------------------------------------------------------------------------
-##     @fn display_usage_and_exit($message, $exitval)
+##     @fn display_usage_and_exit($message, $filenameexitval)
 ##  @brief Display the usage with the given message and exit with the given
 ##         value
 ##  @param $message - Message to display. DEFAULT: ""
@@ -175,6 +185,77 @@ $| = 1;    ## no critic (RequireLocalizedPunctuationVars)
 ## Parse the command line
 process_commandline();
 
+my ($error, $config) = get_config($gOptions{config});
+
+if ($error) {
+  printf STDERR "Error getting config: %s\n", $error;
+  exit(1);
+}
+
+my $schema;
+($error, $schema) = open_gnucash(get_gnucash_filename($gOptions{file}, $config));
+if ($error) {
+  printf STDERR "Error opening GnuCahs file: %s\n", $error;
+  exit(1);
+}
+
+my $warning;
+($error, $warning) = validate_accounts_in_config({
+  schema => $schema,
+  config => $config,
+});
+say STDERR $warning if ($warning);
+if ($error) {
+  say STDERR $error;
+  exit(1);
+}
+
+
+my @members = get_all_members({
+  only_active => !$gOptions{all},
+  schema      => $schema,
+  config      => $config,
+  debug       => $gOptions{debug},
+});
+
+if ($gOptions{debug}) {
+  say pp(\@members);
+}
+
+my @columns = qw( name );
+push(@columns, qw( active )) if ($gOptions{all});
+push(@columns, qw( membership_type membership_amount));
+
+my @widths;
+for my $column (@columns) {
+  say "Assembling values for the '$column' field..." if ($gOptions{debug});
+  my @values = ( 
+    map { $_->{$column} } @members
+  );
+  push(@values, $column);
+
+  say pp(\@values) if ($gOptions{debug});
+
+  push(@widths, max_length(@values));
+}
+
+my $header = "",
+my $uline  = "";
+for my $idx (0 .. $#columns) {
+  $header .= sprintf("%*s  ", -1 * $widths[$idx], title_case($columns[$idx]));
+  $uline  .= ("-" x $widths[$idx]) . "  ";
+}
+say $header;
+say $uline;
+
+for my $member (@members) {
+  my $line = "";
+  for my $idx (0 .. $#columns) {
+    $line .= sprintf("%*s  ", -1 * $widths[$idx], $member->{$columns[$idx]});
+  }
+  say $line;
+}
+
 exit(0);
 
 __END__
@@ -204,24 +285,34 @@ C<notes> field.
   # List all members
   gc-members-list --all
 
+  # Provide a config file and GnuCash file 
+  gc-members-list --config my-config.yaml --file my-organization.gnuash
 
 =head1 OPTIONS
 
 =over 4
 
-=item B<--all>
+=item B<--config> I<ConfigFilename>, B<-c> I<ConfigFilename>
+
+Specify the filename for the config file.
+
+=item B<--file> I<GnuCashFilename>, B<-f> I<GnuCashFilename>
+
+Specify the filename for the GnuCash file.
+
+=item B<--all>, B<-a>
 
   Display both active and inactive members.
 
-=item B<--version>
+=item B<--version>, B<-v>
 
   Print version information and exit.
 
-=item B<--help>
+=item B<--help>, B<-h>, B<-?>
 
   Display basic help.
 
-=item B<--man>
+=item B<--man>, B<-m>
 
   Display more detailed help.
 
