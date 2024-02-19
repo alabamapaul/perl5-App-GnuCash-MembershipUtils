@@ -140,6 +140,45 @@ __PACKAGE__->set_primary_key("guid");
 # Created by DBIx::Class::Schema::Loader v0.07052 @ 2024-02-18 13:56:36
 # DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:GeLwQWyP6SpYSlMASZDedw
 
+=head1 RELATIONSHIPS
 
-# You can replace this text with custom code or comments, and it will be preserved on regeneration
+=cut
+
+=head2 parent
+
+Returns C<undef> or a L<GnuCash::Schema::Result::Account> if the account
+has a L</parent_guid>
+
+=cut
+
+__PACKAGE__->belongs_to(
+  parent => 'GnuCash::Schema::Result::Account', {'foreign.guid' => 'self.parent_guid' }
+);
+
+=head1 METHODS
+
+=cut
+
+=head2 complete_name()
+
+  my $name = $account->complete_name;
+
+=cut
+
+sub complete_name {
+  my $self = shift;
+
+  my @parts = ( $self->name );
+  my $acct = $self->parent;
+
+  while ($acct) {
+    unshift(@parts, $acct->name);
+    $acct = $acct->parent;
+  }
+  # Remove the root account
+  shift(@parts);
+
+  return (join(":", @parts));
+}
+
 1;
