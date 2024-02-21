@@ -111,12 +111,10 @@ Here is a sample config file:
 
     ---
     GnuCash:
-      file: /path/to/organization.gnucash
-      dateFormat: MM/DD/YYYY
-
-    Invoices:
-      frequency:   monthly
-      description: membership dues
+      file:    /path/to/organization.gnucash
+      format:  US
+      memo:    Monthly membership dues
+      account: Assets:Accounts Receivable
 
     MembershipTypes:
       default:
@@ -145,29 +143,42 @@ Here is a sample config file:
 
         The full path to the GnuCash file.
 
-    - dateFormat
+    - format
 
         The date format to use when generating CSV files for import into GnuCash.
 
-- Invoices
+        **NOTE:** This must match the date format selcted in the GnuCash preferences.
 
-    This section contains parametes related to generating CSV files for import
-    into GnuCash.
+        Must be one of:
 
-    Recognized keys are:
+        - US
 
-    - frequency
+            MM/DD/YYYY
 
-        Used to generate descriptions. Should be one of `weekly`, `monthly`, `quaterly`,
-        or `annually`.
+        - UK
 
-        DEFAULT: `monthly`
+            DD/MM/YYYY
 
-    - description
+        - EUROPE
 
-        Used to generate descriptions.
+            DD.MM.YYYY
+
+        - ISO
+
+            YYYY-MM-DD
+
+        DEFAULT: `US`
+
+    - memo
+
+        Optional description or memo used for the item on each invoice.
 
         DEFAULT: `Membership dues`
+
+    - account
+
+        The GnuCash account used for posting the invoices, this is
+        typically `Assets:Accounts Receivable`.
 
 - MembershipTypes
 

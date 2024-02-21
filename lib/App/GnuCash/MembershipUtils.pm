@@ -47,10 +47,11 @@ our %EXPORT_TAGS = (
 );
 
 
-Readonly::Scalar my $EXPECTED_ACCOUNT_TYPE => "INCOME";
+Readonly::Scalar my $EXPECTED_INVOICE_ACCOUNT_TYPE => "RECEIVABLE";
+Readonly::Scalar my $EXPECTED_ITEM_ACCOUNT_TYPE    => "INCOME";
 
 ## Version string
-our $VERSION = qq{0.07};
+our $VERSION = qq{0.01};
 
 =head1 NAME
 
@@ -132,6 +133,10 @@ sub get_config {
         );
         return ($error, $config);
     }
+    ## Load defaults
+    $config->{GnuCash}{format} = "us";
+    $config->{GnuCash}{memo}   = "Membership dues";
+    
     return (undef, $config);
 }
 
@@ -386,7 +391,28 @@ sub validate_accounts_in_config {
     my $accounts = db_accounts_to_hash($schema);
     my @errors;
     my @warnings;
-    
+    if (exists($config->{GnuCash})) {
+        my $config_account = $config->{GnuCash}{account};
+        if (my $gc_account = $accounts->{$config_account}) {
+            if ($gc_account->{account_type} ne $EXPECTED_INVOICE_ACCOUNT_TYPE) {
+                _warning_account_type(
+                    \@warnings,
+                    "'GnuCash.account'",
+                    $gc_account,
+                    $EXPECTED_INVOICE_ACCOUNT_TYPE,
+                );
+            } elsif ($gc_account->{hidden} || $gc_account->{placeholder}) {
+                _error_hidden_or_placeholder_account(
+                    \@errors,
+                    "'GnuCash.account'",
+                );
+            }
+        } else {
+            _error_invalid_account(\@errors, "'GnuCash.account'");
+        }
+    } else {
+        push(@errors, "Missing 'GnuCash' section");
+    }
     if (exists($config->{MembershipTypes})) {
         if (exists($config->{MembershipTypes}{default})) {
             my $error = _validate_membership_type_config($config->{MembershipTypes}{default}, 1);
@@ -395,11 +421,12 @@ sub validate_accounts_in_config {
             } else {
                 my $config_account = $config->{MembershipTypes}{default}{account};
                 if (my $gc_account = $accounts->{$config_account}) {
-                    if ($gc_account->{account_type} ne $EXPECTED_ACCOUNT_TYPE) {
+                    if ($gc_account->{account_type} ne $EXPECTED_ITEM_ACCOUNT_TYPE) {
                         _warning_account_type(
                             \@warnings,
                             "'MembershipTypes.default.account'",
-                            $gc_account,
+                            $gc_account,,
+                            $EXPECTED_ITEM_ACCOUNT_TYPE,
                         );
                     } elsif ($gc_account->{hidden} || $gc_account->{placeholder}) {
                         _error_hidden_or_placeholder_account(
@@ -418,11 +445,12 @@ sub validate_accounts_in_config {
                     my $section = "'MembershipTypes.others' entry $idx";
                     my $config_account = $type->{account};
                     if (my $gc_account = $accounts->{$config_account}) {
-                        if ($gc_account->{account_type} ne $EXPECTED_ACCOUNT_TYPE) {
+                        if ($gc_account->{account_type} ne $EXPECTED_ITEM_ACCOUNT_TYPE) {
                             _warning_account_type(
                                 \@warnings,
                                 $section,
                                 $gc_account,
+                                $EXPECTED_ITEM_ACCOUNT_TYPE,
                             );
                         } elsif ($gc_account->{hidden} || $gc_account->{placeholder}) {
                             _error_hidden_or_placeholder_account(
@@ -465,6 +493,7 @@ sub _warning_account_type {
     my $warnings = shift;
     my $section  = shift;
     my $account  = shift;
+    my $type     = shift;
 
     push(
         @$warnings, 
@@ -472,7 +501,7 @@ sub _warning_account_type {
             "The %s account type is '%s' but should be '%s'",
             $section,
             $account->{account_type},
-            $EXPECTED_ACCOUNT_TYPE,
+            $type,
         )
     );
 }
@@ -548,12 +577,10 @@ Here is a sample config file:
 
     ---
     GnuCash:
-      file: /path/to/organization.gnucash
-      dateFormat: MM/DD/YYYY
-
-    Invoices:
-      frequency:   monthly
-      description: membership dues
+      file:    /path/to/organization.gnucash
+      format:  US
+      memo:    Monthly membership dues
+      account: Assets:Accounts Receivable
 
     MembershipTypes:
       default:
@@ -586,33 +613,46 @@ Recognized keys are:
 
 The full path to the GnuCash file.
 
-=item dateFormat
+=item format
 
 The date format to use when generating CSV files for import into GnuCash.
 
-=back
+B<NOTE:> This must match the date format selcted in the GnuCash preferences.
 
-=item Invoices
-
-This section contains parametes related to generating CSV files for import
-into GnuCash.
-
-Recognized keys are:
+Must be one of:
 
 =over
 
-=item frequency
+=item US
 
-Used to generate descriptions. Should be one of C<weekly>, C<monthly>, C<quaterly>,
-or C<annually>.
+MM/DD/YYYY
 
-DEFAULT: C<monthly>
+=item UK
 
-=item description
+DD/MM/YYYY
 
-Used to generate descriptions.
+=item EUROPE
+
+DD.MM.YYYY
+
+=item ISO
+
+YYYY-MM-DD
+
+=back
+
+DEFAULT: C<US>
+
+=item memo
+
+Optional description or memo used for the item on each invoice.
 
 DEFAULT: C<Membership dues>
+
+=item account
+
+The GnuCash account used for posting the invoices, this is
+typically C<Assets:Accounts Receivable>.
 
 =back
 
