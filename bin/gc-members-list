@@ -212,7 +212,7 @@ if ($error) {
 
 
 my @members = get_all_members({
-  only_active => !$gOptions{all},
+  active_only => !$gOptions{all},
   schema      => $schema,
   config      => $config,
   debug       => $gOptions{debug},

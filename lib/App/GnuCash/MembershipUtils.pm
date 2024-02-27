@@ -16,6 +16,7 @@ use Exporter qw( import );
 use File::Slurp;
 use Data::Dump qw( pp );
 use Readonly;
+use Carp qw( carp );
 
 our @EXPORT_OK = qw(
     db_accounts_to_hash
@@ -49,6 +50,12 @@ our %EXPORT_TAGS = (
 
 Readonly::Scalar my $EXPECTED_INVOICE_ACCOUNT_TYPE => "RECEIVABLE";
 Readonly::Scalar my $EXPECTED_ITEM_ACCOUNT_TYPE    => "INCOME";
+
+
+Readonly::Hash my %DEFAULT_CONFIG_VALUES => (
+    format => "us",
+    memo   => "Membership dues",
+);
 
 ## Version string
 our $VERSION = qq{0.01};
@@ -134,8 +141,10 @@ sub get_config {
         return ($error, $config);
     }
     ## Load defaults
-    $config->{GnuCash}{format} = "us";
-    $config->{GnuCash}{memo}   = "Membership dues";
+    for my $key (keys %DEFAULT_CONFIG_VALUES) {
+        ## Only load them if the current key is undefined
+        $config->{GnuCash}{$key} //= $DEFAULT_CONFIG_VALUES{$key};    
+    }
     
     return (undef, $config);
 }
@@ -232,6 +241,15 @@ sub get_all_members {
     my $schema      = delete $args->{schema};
     my $config      = delete $args->{config};
     my $debug       = delete $args->{debug} // 0;
+    if (my @unused = sort(keys(%$args))) {
+        carp(
+            sprintf(
+                "WARNING: The following unused %s provided: '%s'",
+                (scalar(@unused) == 1 ? "parameter was" : "parameters were"),
+                join("', '", @unused),
+            )
+        );
+    }
 
     # Get default type from config
     my $default_type = {

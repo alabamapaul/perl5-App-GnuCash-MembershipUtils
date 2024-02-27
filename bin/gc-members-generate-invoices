@@ -297,7 +297,7 @@ if ($error) {
 }
 
 my @members = get_all_members({
-  only_active => 1,
+  active_only => 1,
   schema      => $schema,
   config      => $config,
   debug       => $gOptions{debug},
@@ -352,7 +352,7 @@ if (open my $fh, ">:encoding(utf8)", $gOptions{outfile}) {
           owner_id => $member->{id},
           account  => $member->{membership_account},
           price    => $member->{membership_amount},
-          desc     => sprintf("%s - %s", $member->{membership_type}, $gOptions{memo}),
+          desc     => join(" - ", grep { length } ($member->{membership_type}, $gOptions{memo})),
       );
       $csv->say ($fh, [ map { $inv{$_} } @CSV_COLUMNS ]);
   }
