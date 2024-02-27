@@ -54,7 +54,7 @@ Readonly::Scalar my $EXPECTED_ITEM_ACCOUNT_TYPE    => "INCOME";
 
 Readonly::Hash my %DEFAULT_CONFIG_VALUES => (
     format => "us",
-    memo   => "Membership dues",
+    memo   => "Monthly membership dues",
 );
 
 ## Version string
@@ -99,7 +99,8 @@ config.
 =cut
 
 sub get_config {
-    my $filename =  shift // "";
+    my $filename = shift // "";
+    my $debug    = shift // 0;
     $filename    =~ s/^\s+|\s+$//g;
 
     return ("filename cannot be empty", undef) unless length($filename);
@@ -140,12 +141,20 @@ sub get_config {
         );
         return ($error, $config);
     }
+    if ($debug) {
+        printf STDERR "Before applying defaults\n%s\n", pp( $config );
+    }
+
     ## Load defaults
     for my $key (keys %DEFAULT_CONFIG_VALUES) {
         ## Only load them if the current key is undefined
         $config->{GnuCash}{$key} //= $DEFAULT_CONFIG_VALUES{$key};    
     }
     
+    if ($debug) {
+        printf STDERR "After applying defaults\n%s\n", pp( $config );
+    }
+
     return (undef, $config);
 }
 
